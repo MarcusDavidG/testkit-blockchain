@@ -52,6 +52,27 @@ Proposals falling into these categories will be declined with an explanation poi
   `[package.metadata.docs.rs]` table in `crates/testkit/Cargo.toml`: one host
   target and `--cfg docsrs`. Change both together.
 
+## Release notes
+
+Every PR with a user-visible change includes a release note using
+[`.github/release_notes_template.md`](.github/release_notes_template.md).
+
+Entries are required for:
+
+- New, changed, or deprecated public library APIs.
+- CLI flags, output, exit codes, or behavior.
+- Error codes or assertion messages users match on.
+- Dependency or toolchain changes that affect supported versions.
+- Security fixes.
+
+Entries are not required for docs-only edits, test-only changes, internal
+refactors, or CI changes with no user-visible effect.
+
+Add the note to the PR description under `## Release notes`, using the
+template's section headings and one bullet per change. Maintainers assemble
+each release from those blocks, so an entry that only says "misc fixes" or
+repeats the PR title is not enough.
+
 ## CI workflow permissions
 
 Every workflow under `.github/workflows/` declares a top-level
@@ -66,7 +87,7 @@ needs:
 | `issue-triage.yml` (default) | none | — |
 | `issue-triage.yml` → `label` | `issues: write` | Adds labels from issue-form selections; no checkout |
 | `label-sync.yml` (default) | none | — |
-| `label-sync.yml` → `sync` | `issues: write` | Reconciles the documented module, docs, and sizing labels on manual dispatch |
+| `label-sync.yml` → `sync` | `issues: write` | Reconciles the documented module, docs, sizing, and severity labels on manual dispatch |
 
 Rules for new or changed workflows:
 
@@ -83,13 +104,23 @@ block, the absence of `write-all`/`read-all`, and the per-job scopes above.
 
 ## Issue triage
 
-New issues opened from the forms get `module/*` (or `docs`) and `size/*`
-labels automatically from their "Module" and "Size" dropdowns
+New issues opened from the forms get `module/*` (or `docs`), `size/*`, and
+`severity/*` labels automatically from their form dropdowns
 (`.github/workflows/issue-triage.yml`, taxonomy in `BUILD_SPEC.md` §13).
 When adding a dropdown option, add the matching entry to the workflow's
 `LABELS` map in the same PR; `repo_config.rs` fails otherwise.
 Maintainers can run `.github/workflows/label-sync.yml` manually to create or
-update the documented module, docs, and sizing labels reproducibly.
+update the documented module, docs, sizing, and severity labels
+reproducibly. The workflow and `BUILD_SPEC.md` §13 must list the same label
+names; verify with:
+
+```sh
+gh workflow run label-sync.yml --repo soroban-testkit/testkit-blockchain
+gh label list --repo soroban-testkit/testkit-blockchain
+```
+
+`good first issue` and `help wanted` use GitHub's built-in space-separated
+spellings, not hyphenated variants.
 
 ### Maintainer triage guide (#251)
 
@@ -278,5 +309,5 @@ the package you happened to build.
 
 ## Good first issues
 
-Labeled `good-first-issue`. Module 7 (`ttl`) is not beginner-friendly and
+Labeled `good first issue`. Module 7 (`ttl`) is not beginner-friendly and
 is never labeled as such.
