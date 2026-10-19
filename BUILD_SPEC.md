@@ -645,7 +645,7 @@ The Soroban toolchain moves quickly and this document is a snapshot. Confirm the
 
 Once Module 8 is done, the repo can be applied to a Wave Program. Target 12–15 open issues before a Wave opens; an approved repo with an empty board is worse than not applying. This target balances contributor engagement (enough work for a healthy cohort) against maintainer capacity to review and merge without overwhelming the backlog. Issues beyond this target tend to go stale before pickup.
 
-Every issue must state: the problem, affected file paths, expected behavior, acceptance criteria, and how to test locally. An issue that does not meet that bar is not ready for a `good-first-issue` label.
+Every issue must state: the problem, affected file paths, expected behavior, acceptance criteria, and how to test locally. An issue that does not meet that bar is not ready for a `good first issue` label.
 
 **Natural issue seams in this design:**
 
@@ -661,8 +661,8 @@ Label taxonomy:
 
 | Label | Meaning | Apply when |
 |---|---|---|
-| `good-first-issue` | Scoped, self-contained, no cross-module context needed | The acceptance criteria touch one file and one public item |
-| `help-wanted` | Maintainers want outside contributors on this, regardless of difficulty | Any open issue the maintainers are not planning to pick up themselves |
+| `good first issue` | Scoped, self-contained, no cross-module context needed | The acceptance criteria touch one file and one public item |
+| `help wanted` | Maintainers want outside contributors on this, regardless of difficulty | Any open issue the maintainers are not planning to pick up themselves |
 | `module/core` | Scoped to `src/core/` | Changes `TestEnv` or `TestkitError` |
 | `module/money` | Scoped to `src/money/` | Changes generators or `Conservation` |
 | `module/events` | Scoped to `src/events/` | Changes `EventLog` or capture |
@@ -677,11 +677,20 @@ Label taxonomy:
 | `severity/high` | Incorrect results or a crash with a workaround | The bug is real but avoidable (e.g. by pinning a version or avoiding one input) |
 | `severity/low` | Cosmetic, docs, or minor inconvenience | A doc typo, confusing error message, or non-functional nit |
 
-**Owner-facing usage:** an issue gets exactly one `module/*` label (or `docs` if it touches no module code), exactly one `size/*` label (feature requests) or `severity/*` label (bug reports), and `good-first-issue` and/or `help-wanted` as applicable. An issue missing a `module/*` or `docs` label, and a `size/*` or `severity/*` label as appropriate for its form, is not ready to open.
+**Owner-facing usage:** an issue gets exactly one `module/*` label (or `docs` if it touches no module code), exactly one `size/*` label (feature requests) or `severity/*` label (bug reports), and `good first issue` and/or `help wanted` as applicable. An issue missing a `module/*` or `docs` label, and a `size/*` or `severity/*` label as appropriate for its form, is not ready to open.
 
 **Difficulty guidance:** Modules 3, 4, 5, and the `audit` rules are good first issues. Module 7 is not — do not label TTL work as beginner-friendly.
 
-**Automatic labels:** issues opened from the forms in `.github/ISSUE_TEMPLATE/` get their `module/*` (or `docs`) and `size/*` labels from the form's "Module" and "Size" dropdowns, applied by `.github/workflows/issue-triage.yml` when the issue is opened. The workflow only adds labels from a fixed allowlist and never removes or edits them afterwards; `good-first-issue` and `help-wanted` stay a maintainer decision.
+**Automatic labels:** issues opened from the forms in `.github/ISSUE_TEMPLATE/` get their `module/*` (or `docs`), `size/*`, and `severity/*` labels from the form dropdowns, applied by `.github/workflows/issue-triage.yml` when the issue is opened. The workflow only adds labels from a fixed allowlist and never removes or edits them afterwards; `good first issue` and `help wanted` stay a maintainer decision.
+
+**Names and provisioning:** the label names in the table are the exact GitHub names. `good first issue` and `help wanted` use GitHub's built-in space-separated spellings, not hyphenated variants. The namespaced labels, plus `docs`, are created or reconciled by `.github/workflows/label-sync.yml`; run it manually after changing this table:
+
+```sh
+gh workflow run label-sync.yml --repo soroban-testkit/testkit-blockchain
+gh label list --repo soroban-testkit/testkit-blockchain
+```
+
+Update `label-sync.yml`, `issue-triage.yml`, and this table in the same PR. A label that appears in the docs but not in the provisioning workflow (or the reverse) is a bug. The sync workflow only creates or updates the labels it lists; it never deletes labels or edits existing issues.
 
 ### Seeding safeguards
 
@@ -694,13 +703,13 @@ Seeding many issues at once is where low-quality and duplicate entries get in. A
 3. **In scope.** Nothing in it falls under [§3](#3-scope-boundaries); in particular nothing that needs network access at test time.
 4. **Not a duplicate.** Before opening, search open *and closed* issues and open PRs for the same affected path and the same public item (`is:issue <path>`, `is:pr <path>`, and the item name). If a match exists, comment on or reopen it instead. Two issues touching the same public item are duplicates unless their acceptance criteria are disjoint, and then each must link the other.
 5. **Not already done.** The behavior is checked against `main` at seeding time — the code, its tests, and its docs — so the issue does not describe something that has since landed.
-6. **Independently mergeable.** It can be completed and merged without another open issue landing first. If it cannot, state the dependency in the body and do not label it `good-first-issue`.
+6. **Independently mergeable.** It can be completed and merged without another open issue landing first. If it cannot, state the dependency in the body and do not label it `good first issue`.
 7. **Labeled.** Exactly one `module/*` or `docs` label and exactly one `size/*` label, per the taxonomy above.
 
 **Bounded batching workflow:**
 
 1. **Draft a batch of at most 5 issues** in one place (a scratch document, not the tracker). Do not draft from a template loop that stamps the same text across many paths; each issue's problem statement is written for that issue.
-2. **Review the batch against the readiness review**, including a duplicate search for every issue, both against the tracker and against the rest of the batch. A second maintainer reviews any batch that adds `good-first-issue` labels.
+2. **Review the batch against the readiness review**, including a duplicate search for every issue, both against the tracker and against the rest of the batch. A second maintainer reviews any batch that adds `good first issue` labels.
 3. **Open the batch**, then stop and re-read the board as a contributor would see it. Fix overlapping wording or acceptance criteria before drafting the next batch.
 4. **Repeat until the board holds 12–15 ready issues, and no more.** Issues beyond that target go stale before anyone picks them up; keep further drafts out of the tracker until the open count drops.
 5. **Close rather than accumulate.** An issue found to be a duplicate, out of scope, or already done during a later batch is closed with a link to the canonical issue or commit, not left open with a comment.

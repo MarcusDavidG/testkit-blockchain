@@ -354,7 +354,7 @@ fn issue_config_prompts_authors_to_search_existing_issues() {
 }
 
 #[test]
-fn label_sync_reconciles_every_documented_module_and_size_label() {
+fn label_sync_reconciles_every_documented_label() {
     let workflow = read(".github/workflows/label-sync.yml");
     assert!(workflow.contains("workflow_dispatch: {}"));
     assert!(workflow.contains("permissions: {}"));
@@ -374,11 +374,35 @@ fn label_sync_reconciles_every_documented_module_and_size_label() {
         "size/s",
         "size/m",
         "size/l",
+        "severity/critical",
+        "severity/high",
+        "severity/low",
     ] {
         assert!(
             workflow.contains(&format!("name: '{label}'")),
             "missing label `{label}`"
         );
+    }
+}
+
+#[test]
+fn documented_label_names_use_github_spellings() {
+    let spec = read("BUILD_SPEC.md");
+    for label in ["good first issue", "help wanted"] {
+        assert!(
+            spec.contains(&format!("| `{label}` |")),
+            "BUILD_SPEC.md §13 must document the GitHub label `{label}`"
+        );
+    }
+
+    for doc in ["BUILD_SPEC.md", "CONTRIBUTING.md"] {
+        let contents = read(doc);
+        for hyphenated in ["good-first-issue", "help-wanted"] {
+            assert!(
+                !contents.contains(hyphenated),
+                "{doc} must use GitHub's space-separated label spelling, not `{hyphenated}`"
+            );
+        }
     }
 }
 
