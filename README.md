@@ -34,7 +34,7 @@ A small escrow contract, tested end to end: mint a token, release it to
 the seller, and check the event, the balances, and that no value was
 created or destroyed along the way.
 
-```
+```rust
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env};
 use soroban_testkit::prelude::*;
 
@@ -188,7 +188,7 @@ Each command exits non-zero on failure, with the reason on stderr (#249):
 ```sh
 # coverage: cargo-llvm-cov not installed, or the run itself fails
 $ soroban-testkit coverage
-error: failed to run `cargo llvm-cov` (No such file or directory); is cargo-llvm-cov installed? try `cargo install cargo-llvm-cov`
+error: failed to inspect cargo-llvm-cov version (No such file or directory (os error 2)); install with `cargo install cargo-llvm-cov`
 $ soroban-testkit coverage --fail-under 90
 error: coverage run failed (cargo llvm-cov exited with exit status: 101)
 
@@ -471,18 +471,17 @@ network fetch, instead of silently falling back to it.
 
 ## Supported versions
 
-- **Rust:** the `stable` channel pinned in
-  [`rust-toolchain.toml`](rust-toolchain.toml). There is no separate MSRV —
-  the pinned stable toolchain is the only version CI runs against. See
-  [CONTRIBUTING.md's Rust edition policy](CONTRIBUTING.md#rust-edition-policy)
-  for how and when that pin moves.
-- **`soroban-sdk`:** the version pinned in `[workspace.dependencies]` in the
-  root `Cargo.toml` is the only version this crate is tested against for
-  every PR. A weekly `scheduled-sdk-check` CI job additionally builds and
-  tests the workspace against whatever version crates.io currently
-  considers latest, independent of that pin, and opens a tracking issue if
-  a newer release breaks compatibility — so drift is caught before a
-  contributor hits it, without requiring every PR to track upstream.
+| Rust toolchain | `soroban-sdk` | Validation | Cadence |
+| --- | --- | --- | --- |
+| `stable` from [`rust-toolchain.toml`](rust-toolchain.toml) | `27.0.6`, pinned in [`Cargo.toml`](Cargo.toml) | `cargo build --workspace`, `cargo test --workspace`, and `cargo doc --workspace` | Every pull request |
+| `stable` | Latest crates.io release | `cargo build --workspace` and `cargo test --workspace` | Weekly by [`scheduled-sdk-check`](.github/workflows/ci.yml) |
+| Latest `nightly` | Pinned workspace version (`27.0.6`) | `cargo +nightly build --workspace` and `cargo +nightly test --workspace` | Weekly by [`scheduled-nightly-check`](.github/workflows/ci.yml) |
+
+The pinned stable toolchain and SDK version are the supported combination;
+the scheduled latest-SDK and nightly runs are compatibility signals, not
+additional support guarantees. They open a tracking issue when a scheduled
+run fails. See [CONTRIBUTING.md's Rust edition policy](CONTRIBUTING.md#rust-edition-policy)
+for how and when the stable toolchain pin moves.
 
 ## Status
 
