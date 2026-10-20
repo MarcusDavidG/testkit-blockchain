@@ -134,6 +134,33 @@ soroban-testkit/
 
 The crate must have **zero non-dev network dependencies** and must compile for the WASM target where applicable.
 
+### 3a. Resource probing vs. benchmark-framework scope
+
+**What resource probing is:**
+The CLI's `limits` subcommand (`soroban-testkit limits`) is a *resource probe*, not a benchmark harness. It answers the question "what is the maximum input size (e.g. recipient count, entry count) at which this contract function still fits within Soroban's execution budget?" by invoking the contract with increasing parameter values until it exceeds the resource limit, then reporting the last successful value together with its instruction count, memory bytes, and transaction size.
+
+**What resource probing measures:**
+- The ceiling of a ramped parameter before the Soroban resource limit is breached.
+- Instruction count, memory bytes, and transaction size at that ceiling — the same resource dimensions Soroban's validators enforce.
+- Whether a specific entry point consistently fits within budget across a range of inputs.
+
+**What resource probing does not provide:**
+- Wall-clock timing or CPU-cycle measurements.
+- Statistical analysis, variance, or confidence intervals across repeated runs.
+- Historical result tracking or automated regression detection between commits.
+- A full criterion-style or benchmark-harness workflow.
+
+**How to use resource measurements when investigating changes:**
+Run `soroban-testkit limits --contract <path-to-wasm> --fn <name> --ramp <param>` before and after a change. If the ceiling value or the reported instruction count shifts significantly, the change has affected on-chain resource usage — investigate further before merging. The probe is deterministic (execution is in-process, not network-dependent) so differences between two runs reflect code changes, not environmental noise.
+
+**What would need to change before a larger benchmarking framework could be considered:**
+Adding a criterion-style harness, historical result storage, or automated regression detection would require network-free infrastructure for result persistence, a dedicated CI artifact store, and meaningful statistical methodology for Soroban's sandboxed execution model. Any such proposal must first demonstrate that the resource probe is insufficient for the contributor's actual use case, propose a concrete and bounded extension, and be reviewed against §3's out-of-scope list. Proposals that duplicate or wrap criterion without addressing Soroban-specific resource semantics will be declined.
+
+**Contributor guidance:**
+- Open issues and PRs touching `crates/cli/src/commands/limits.rs` that extend the fields *reported* by the probe (e.g. ledger reads/writes if the SDK exposes them) are in scope.
+- Issues proposing timing-based benchmarks, historical tracking, or criterion integration are out of scope and will be closed with a pointer to this section.
+- The output of `soroban-testkit limits` is documentation of the Soroban execution budget, not a performance benchmark; do not cite it as a wall-clock performance number.
+
 ---
 
 ## 4. Build order
@@ -552,7 +579,7 @@ Use `clap` with derive. Three subcommands, built in this order.
 Wraps coverage collection for the WASM target, which does not work out of the box.
 
 ```
-soroban-testkit coverage [--format text|lcov|html] [--fail-under <pct>] [--open]
+soroban-testkit coverage [--format text|lcov|html|json] [--fail-under <pct>] [--open]
 ```
 
 Shells out to the underlying coverage tool. Its job is knowing the right flags for Soroban's target, not reimplementing coverage.
@@ -562,10 +589,12 @@ Shells out to the underlying coverage tool. Its job is knowing the right flags f
 Empirically discovers resource ceilings rather than guessing them.
 
 ```
-soroban-testkit limits --contract <path-to-wasm> --fn <name> --ramp <param>
+soroban-testkit limits --contract <path-to-wasm> --fn <name> --ramp <param> [--jobs <n>]
 ```
 
 Invokes the function with an increasing parameter (e.g. recipient count) until it exceeds resource limits, then reports the last successful value plus instruction count, ledger reads/writes, and transaction size at that point.
+
+`--jobs <n>` (1 to 8, default 1) is opt-in. Each batch runs up to `n` probes concurrently, each in its own process. The doubling phase batches consecutive ladder values. The refinement phase probes up to `n` evenly spaced points between the bounds per round. Results are read back in ramp order, so the reported boundary is the same as a sequential run for any `n`, under the same monotonicity assumption that binary refinement already makes. A probe past the first failure is discarded, so higher values can use more CPU. With `--jobs 1`, probing is one at a time, as before.
 
 **This directly answers the `batch_payout` maximum-recipients question** and is the CLI's most compelling demo. Feature it in the README.
 

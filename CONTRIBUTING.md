@@ -52,26 +52,32 @@ Proposals falling into these categories will be declined with an explanation poi
   `[package.metadata.docs.rs]` table in `crates/testkit/Cargo.toml`: one host
   target and `--cfg docsrs`. Change both together.
 
-## Release notes
+### Network-free verification
 
-Every PR with a user-visible change includes a release note using
-[`.github/release_notes_template.md`](.github/release_notes_template.md).
+Tests and CLI commands must work without network access. On Linux, after
+fetching dependencies with `cargo fetch --locked`, run the workspace tests
+and CLI help command in a network namespace:
 
-Entries are required for:
+```sh
+sudo unshare --net -- runuser -u "$USER" --preserve-environment -- env CARGO_NET_OFFLINE=true cargo test --workspace --offline
+sudo unshare --net -- runuser -u "$USER" --preserve-environment -- env CARGO_NET_OFFLINE=true cargo run --offline -p soroban-testkit-cli -- --help
+```
 
-- New, changed, or deprecated public library APIs.
-- CLI flags, output, exit codes, or behavior.
-- Error codes or assertion messages users match on.
-- Dependency or toolchain changes that affect supported versions.
-- Security fixes.
+The test job in `.github/workflows/ci.yml` runs the same checks. `--offline`
+prevents Cargo from fetching dependencies; the network namespace also prevents
+tests and the CLI process from opening network connections.
 
-Entries are not required for docs-only edits, test-only changes, internal
-refactors, or CI changes with no user-visible effect.
+### Release package contents
 
-Add the note to the PR description under `## Release notes`, using the
-template's section headings and one bullet per change. Maintainers assemble
-each release from those blocks, so an entry that only says "misc fixes" or
-repeats the PR title is not enough.
+Before publishing `soroban-testkit`, inspect its package file list:
+
+```sh
+cargo package -p soroban-testkit --list
+```
+
+The crate manifest excludes `crates/testkit/tests/**`; these are workspace
+integration checks, not files needed by downstream users. The package-list
+check also runs in CI.
 
 ## CI workflow permissions
 
@@ -205,6 +211,101 @@ full policy check runs.
 - Failure messages are a first-class feature of this crate. An assertion
   helper whose failure message doesn't tell the user what went wrong and
   what to look at is not done.
+- CLI `--help` text must state each command's real defaults and
+  limitations. The top-level and every subcommand's `--help` and `-h`
+  output is pinned in `crates/cli/tests/snapshots/help/`; after an
+  intentional change, regenerate and commit the snapshots with
+  `UPDATE_HELP_SNAPSHOTS=1 cargo test -p soroban-testkit-cli --test help_snapshots`.
+  A new subcommand must add its snapshot cases there.
+
+
+## Panic and error-handling policy
+
+This crate has two distinct categories of failure, and they must not be
+conflated. Using the wrong mechanism for a given failure mode is a
+documentation and compatibility bug.
+
+### Assertion helpers — intentional panics
+
+Assertion helpers (any function whose name begins with `assert_` or that
+is documented as verifying a contract invariant) are **expected to panic**
+when the condition under test is not met. A failing assertion is not a
+recoverable error; it is a signal to the developer that the contract
+misbehaved, and panicking is how `cargo test` surfaces that signal.
+
+Rules for assertion helpers:
+
+- **Always panic with a `TestkitError`, never with a bare string.**
+  `panic!("...")` and `panic!("{}", msg)` are prohibited; use
+  `panic!("{}", TestkitError::AssertionFailed("...".into()))` or the
+  equivalent `panic!` through `TestkitError`'s `Display` impl instead.
+- **Use `TestkitError::AssertionFailed`** for invariant violations (an
+  expected event was not emitted, conservation did not hold, an unauthorized
+  call was not rejected).
+- **Use `TestkitError::Misuse`** when the testkit API itself was called
+  outside its documented contract (e.g. asserting on events before a
+  capture window was opened, or warping the ledger clock to a past
+  timestamp). This is a developer error in the test code, not a contract
+  behavior failure.
+- **Include the full observed vs. expected context** in the message so a
+  developer reading the panic output can diagnose the problem without
+  re-running with extra logging.
+- **Pin representative failure output in tests** using
+  `#[should_panic(expected = "...")]` with a meaningful substring of the
+  expected message. Tests that accept any panic string are not sufficient.
+
+### Setup and configuration operations — recoverable errors
+
+Functions that initialize, configure, or acquire resources for testing
+(e.g. constructors, environment wrappers, anything documented as a
+"setup" operation) must **return `Result<_, TestkitError>` or use a
+typed error** rather than panic when an expected, recoverable failure
+occurs. This includes:
+
+- Configuration values that may be invalid (e.g. out-of-range decimals,
+  unknown storage kinds).
+- Resource acquisition that can fail for external reasons.
+- Operations on input that the caller controls and may legitimately get
+  wrong.
+
+Rules for setup operations:
+
+- **Return `Result`**, not `Option` or an untyped `panic`.
+- **Prefer `TestkitError::Misuse`** when the error arises from incorrect
+  use of the API, and **`TestkitError::DecodeFailed`** when a captured
+  value cannot be deserialized into the requested type.
+- **Document the error conditions** in the function's doc comment so
+  callers know when to expect a non-`Ok` return.
+- **Do not use `unwrap()` or `expect()`** in library code outside tests —
+  use `TestkitError::Misuse` and let the caller decide whether to propagate
+  or panic.
+
+### Testing recoverable errors vs. expected panics
+
+| Failure kind | How to test |
+|---|---|
+| Assertion helper that should panic | `#[should_panic(expected = "<substring>")]` pinning the `TestkitError` message |
+| Setup function returning `Err(_)` | `assert!(result.is_err())` or `matches!(result, Err(TestkitError::Misuse(_)))` |
+| Assertion helper that should *not* panic | Call it in a normal test; the absence of panic is the assertion |
+
+Never use `std::panic::catch_unwind` to test a setup function's error
+path — if a setup function can fail in expected ways, it must return
+`Result`, not panic.
+
+### Distinguishing developer-facing from external-input failures
+
+- A panic from an assertion helper is a **developer-facing assertion
+  failure**: the developer's test is telling them the contract misbehaved.
+  It is never caused by external input or production data at test time.
+- A `TestkitError::Misuse` returned from a setup function signals that
+  **the test code itself is incorrect** (wrong arguments, wrong call
+  order). It may be surfaced to the developer as a `Result::Err` or, if
+  the calling code chooses to `unwrap`, as a secondary panic — but the
+  root cause is always the test author's mistake, not the contract's.
+- Functions that take developer-controlled input (seeds, counts, durations)
+  should document any validity constraints in their doc comment and use
+  `TestkitError::Misuse` (returned as `Err`) for constraint violations
+  rather than panicking, so callers can handle them.
 
 ## Maintainer SDK review checklist
 
